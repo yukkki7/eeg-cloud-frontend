@@ -2,6 +2,7 @@
 "use client";
 import { FC, useState } from "react";
 import { Line } from "react-chartjs-2";
+import type { ChartData } from "chart.js";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -15,7 +16,6 @@ import {
 
 import { mockEEG } from "../data/mockEEG";
 import { parseEEGColumnar } from "../data/parseEEG";
-import type { ChartData } from "chart.js";
 import type { EEGRawData } from "../data/types";
 
 // register Chart.js modules
@@ -30,51 +30,50 @@ ChartJS.register(
 );
 
 export const EEGChart: FC = () => {
-  // parse columnar data
-  const rawData: EEGRawData = mockEEG;
-  const parsed = parseEEGColumnar(rawData);
-  // destructure to ensure labels and datasets are defined
-  const labels = parsed.labels as string[];
-  const datasetsAll = parsed.datasets;
+  const raw: EEGRawData = mockEEG;
+  const { labels = [], datasets } = parseEEGColumnar(raw);
 
-  const allChannels = Object.keys(rawData.channels);
-
-  // channel selection state
-  const [selected, setSelected] = useState<Record<string, boolean>>(
-    Object.fromEntries(allChannels.map((ch) => [ch, true]))
+  const maxIndex = labels.length;
+  const [start, setStart] = useState(0);
+  const [end, setEnd] = useState(maxIndex);
+  const [selected, setSelected] = useState(
+    Object.fromEntries(
+      Object.keys(raw.channels).map((ch) => [ch, true])
+    ) as Record<string, boolean>
   );
 
-  // time window state: start time in seconds
-  const [startSec, setStartSec] = useState(0);
-  const windowLength = 10; // 10 seconds window
-
-  // handle start input change
-  const handleStartChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const maxStart = labels.length - windowLength;
-    const val = Math.max(0, Math.min(maxStart, Number(e.target.value)));
-    setStartSec(val);
+  const handleStart = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let v = Number(e.target.value);
+    if (isNaN(v)) return;
+    v = Math.max(0, Math.min(v, end - 1));
+    setStart(v);
   };
 
-  // filter and slice data
-  const filteredDatasets = datasetsAll
+  const handleEnd = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let v = Number(e.target.value);
+    if (isNaN(v)) return;
+    v = Math.max(start + 1, Math.min(v, maxIndex));
+    setEnd(v);
+  };
+
+  const windowLabels = labels.slice(start, end);
+  const windowDatasets = datasets
     .filter((ds) => selected[ds.label as string])
     .map((ds) => ({
       ...ds,
-      data: (ds.data as number[]).slice(startSec, startSec + windowLength),
+      data: (ds.data as number[]).slice(start, end),
     }));
-
-  const windowLabels = labels.slice(startSec, startSec + windowLength);
 
   const data: ChartData<"line"> = {
     labels: windowLabels,
-    datasets: filteredDatasets,
+    datasets: windowDatasets,
   };
 
   const options = {
     responsive: true,
     plugins: {
       legend: { position: "top" as const, labels: { color: "black" } },
-      title: { display: true, text: "EEG Metrics Over Time", color: "black" },
+      title: { display: true, text: "EEG Metrics", color: "black" },
     },
     scales: {
       x: {
@@ -89,27 +88,34 @@ export const EEGChart: FC = () => {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center">
-      {/* time window input */}
-      <div className="mb-4">
-        <label className="mr-2 text-black font-medium">Start Second:</label>
-        <input
-          type="number"
-          min={0}
-          max={labels.length - windowLength}
-          value={startSec}
-          onChange={handleStartChange}
-          className="border p-1 w-16"
-        />
+    <div className="flex flex-col items-center justify-center p-4">
+      <div className="flex items-center space-x-4 mb-4">
+        <div className="flex flex-col">
+          <label className="text-black mb-1">Start (s):</label>
+          <input
+            type="number"
+            min={0}
+            max={end - 1}
+            value={start}
+            onChange={handleStart}
+            className="border p-1 w-20 text-black"
+          />
+        </div>
+        <div className="flex flex-col">
+          <label className="text-black mb-1">End (s):</label>
+          <input
+            type="number"
+            min={start + 1}
+            max={maxIndex}
+            value={end}
+            onChange={handleEnd}
+            className="border p-1 w-20 text-black"
+          />
+        </div>
       </div>
-
-      {/* channel selection */}
-      <div className="mb-4 flex space-x-4 justify-center">
-        {allChannels.map((ch) => (
-          <label
-            key={ch}
-            className="inline-flex items-center space-x-2 text-black"
-          >
+      <div className="flex space-x-4 mb-4">
+        {Object.keys(raw.channels).map((ch) => (
+          <label key={ch} className="inline-flex items-center text-black">
             <input
               type="checkbox"
               checked={selected[ch]}
@@ -117,13 +123,11 @@ export const EEGChart: FC = () => {
                 setSelected((prev) => ({ ...prev, [ch]: !prev[ch] }))
               }
             />
-            <span className="capitalize text-black font-medium">{ch}</span>
+            <span className="ml-1 capitalize">{ch}</span>
           </label>
         ))}
       </div>
-
-      {/* chart */}
-      <div className="w-full max-w-4xl h-96 mx-auto">
+      <div className="w-full max-w-4xl h-96">
         <Line data={data} options={options} />
       </div>
     </div>
