@@ -15,6 +15,7 @@ import {
 } from "chart.js";
 
 import { mockEEG } from "../data/mockEEG";
+// import { mock6D } from "../data/mockEEG6";
 import { parseEEGColumnar } from "../data/parseEEG";
 import type { EEGRawData } from "../data/types";
 
