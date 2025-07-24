@@ -9,83 +9,133 @@ export default function ChartsPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const miniRef = useRef<HTMLVideoElement>(null);
 
-  // dragging state for mini-window
-  const [pos, setPos] = useState({
-    x: window.innerWidth - 180,
-    y: window.innerHeight - 140,
-  });
+  // PIP window dragging state
+  const [pos, setPos] = useState({ x: 0, y: 0 });
   const [dragging, setDragging] = useState(false);
   const dragOffset = useRef({ x: 0, y: 0 });
 
-  // control mini-window visibility
+  // Mini-window visibility
   const [showMini, setShowMini] = useState(false);
 
-  // sync mini video time to main video
+  // Track current playback time and play state of the main video
+  const [currentTime, setCurrentTime] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  // Initialize PIP position on mount
+  useEffect(() => {
+    const miniW = 400,
+      miniH = 225,
+      margin = 20;
+    setPos({
+      x: window.innerWidth - miniW - margin,
+      y: window.innerHeight - miniH - margin,
+    });
+  }, []);
+
+  // Sync mini video to main: time, play, pause
   useEffect(() => {
     const main = videoRef.current;
     const mini = miniRef.current;
     if (!main || !mini) return;
-    const handler = () => {
+
+    const syncTime = () => {
       mini.currentTime = main.currentTime;
     };
-    main.addEventListener("timeupdate", handler);
-    return () => {
-      main.removeEventListener("timeupdate", handler);
+    const syncPlay = () => {
+      if (showMini) mini.play();
     };
-  }, []);
+    const syncPause = () => {
+      mini.pause();
+    };
 
-  // observe how much of the main video is visible
+    main.addEventListener("timeupdate", syncTime);
+    main.addEventListener("play", syncPlay);
+    main.addEventListener("pause", syncPause);
+
+    return () => {
+      main.removeEventListener("timeupdate", syncTime);
+      main.removeEventListener("play", syncPlay);
+      main.removeEventListener("pause", syncPause);
+    };
+  }, [showMini]);
+
+  // When PIP appears, if main is playing start mini; otherwise keep it paused
+  useEffect(() => {
+    const main = videoRef.current;
+    const mini = miniRef.current;
+    if (showMini && main && mini) {
+      if (!main.paused) mini.play();
+      else mini.pause();
+    }
+  }, [showMini]);
+
+  // Observe visibility of main video to toggle PIP
   useEffect(() => {
     const vid = videoRef.current;
     if (!vid) return;
-
     const observer = new IntersectionObserver(
-      (entries) => {
-        const entry = entries[0];
-        // if less than 80% visible, show mini-window
-        setShowMini(entry.intersectionRatio < 0.8);
-      },
+      ([entry]) => setShowMini(entry.intersectionRatio < 0.8),
       { threshold: [0, 0.8, 1] }
     );
-
     observer.observe(vid);
+    return () => observer.disconnect();
+  }, []);
+
+  // Update currentTime on main video progress
+  const handleTimeUpdate = () => {
+    setCurrentTime(videoRef.current?.currentTime ?? 0);
+  };
+
+  // Track play/pause state via native controls
+  useEffect(() => {
+    const vid = videoRef.current;
+    if (!vid) return;
+    const onPlay = () => setIsPlaying(true);
+    const onPause = () => setIsPlaying(false);
+    vid.addEventListener("play", onPlay);
+    vid.addEventListener("pause", onPause);
     return () => {
-      observer.disconnect();
+      vid.removeEventListener("play", onPlay);
+      vid.removeEventListener("pause", onPause);
     };
   }, []);
 
-  // dragging logic
+  // Custom play/pause triggered by chart button
+  const handlePlayPause = () => {
+    const vid = videoRef.current;
+    if (!vid) return;
+    if (vid.paused) vid.play();
+    else vid.pause();
+  };
+
+  // Drag handlers for PIP
   const onMouseDown = (e: React.MouseEvent) => {
     setDragging(true);
     dragOffset.current = { x: e.clientX - pos.x, y: e.clientY - pos.y };
   };
   useEffect(() => {
-    const onMouseMove = (e: MouseEvent) => {
+    const onMove = (e: MouseEvent) => {
       if (!dragging) return;
       setPos({
         x: e.clientX - dragOffset.current.x,
         y: e.clientY - dragOffset.current.y,
       });
     };
-    const onMouseUp = () => setDragging(false);
-    document.addEventListener("mousemove", onMouseMove);
-    document.addEventListener("mouseup", onMouseUp);
+    const onUp = () => setDragging(false);
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
     return () => {
-      document.removeEventListener("mousemove", onMouseMove);
-      document.removeEventListener("mouseup", onMouseUp);
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
     };
   }, [dragging]);
 
-  // click on chart to seek video
+  // Seek & pause when a chart timestamp is clicked
   const handlePointClick = (sec: number) => {
     const vid = videoRef.current;
     if (!vid) return;
-    if (sec <= 15) {
-      vid.currentTime = sec;
-      vid.play();
-    } else {
-      alert("Video unavailable for this time");
-    }
+    vid.currentTime = sec;
+    vid.pause();
   };
 
   return (
@@ -101,6 +151,7 @@ export default function ChartsPage() {
               ref={videoRef}
               src="/test_video.mp4"
               controls
+              onTimeUpdate={handleTimeUpdate}
               className="w-full h-full object-cover"
             />
           </div>
@@ -111,15 +162,23 @@ export default function ChartsPage() {
           <h2 className="text-2xl font-semibold mb-2 text-black">
             EEG Visualizations
           </h2>
-          <div className="w-full flex gap-6">
-            <div className="flex-[6] bg-gray-50 p-4 rounded-lg shadow-sm h-[44rem] flex flex-col">
+          <div className="w-full flex gap-6 justify-center transform scale-80 origin-top">
+            {/* Line Plot */}
+            <div className="flex-[6] bg-gray-50 p-4 rounded-lg shadow-sm h-[48rem] flex flex-col">
               <h3 className="text-lg font-medium mb-2 text-center text-black">
                 Line Plot
               </h3>
               <div className="flex-1">
-                <EEGChart onPointClick={handlePointClick} />
+                <EEGChart
+                  onPointClick={handlePointClick}
+                  revealUpTo={currentTime}
+                  onPlayPause={handlePlayPause}
+                  isPlaying={isPlaying}
+                />
               </div>
             </div>
+
+            {/* Polygon Chart */}
             <div className="flex-[4] bg-gray-50 p-4 rounded-lg shadow-sm h-[48rem] flex flex-col">
               <h3 className="text-lg font-medium mb-2 text-center text-black">
                 Polygon Chart
@@ -132,10 +191,10 @@ export default function ChartsPage() {
         </section>
       </div>
 
-      {/* Bottom spacer */}
+      {/* bottom spacer */}
       <div className="h-20" />
 
-      {/* Draggable mini video: only render when main video is <80% visible */}
+      {/* Draggable mini video mirror */}
       {showMini && (
         <div
           onMouseDown={onMouseDown}
@@ -154,6 +213,7 @@ export default function ChartsPage() {
             ref={miniRef}
             src="/test_video.mp4"
             muted
+            playsInline
             className="w-full h-full object-cover"
           />
         </div>
