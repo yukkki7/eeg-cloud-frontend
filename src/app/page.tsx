@@ -1,27 +1,33 @@
-// src/app/flow/charts/page.tsx
+// src/app/page.tsx
 "use client";
 
 import React, { useRef, useEffect, useState } from "react";
-import { EEGChart } from "@/components/EEGChart";
-import { EEGPolygonChart } from "@/components/EEGPolygonChart";
+import { EEGChart } from "../components/EEGChart";
+import { EEGPolygonChart } from "../components/EEGPolygonChart";
+import { HistoryPanel } from "../components/HistoryPanel";
 
 export default function ChartsPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const miniRef = useRef<HTMLVideoElement>(null);
 
-  // PIP window dragging state
+  // PIP dragging state
   const [pos, setPos] = useState({ x: 0, y: 0 });
   const [dragging, setDragging] = useState(false);
   const dragOffset = useRef({ x: 0, y: 0 });
 
-  // Mini-window visibility
+  // show mini-player?
   const [showMini, setShowMini] = useState(false);
 
-  // Track current playback time and play state of the main video
+  // video playback time for chart reveal
   const [currentTime, setCurrentTime] = useState(0);
+
+  // track play/pause state for overlay button
   const [isPlaying, setIsPlaying] = useState(false);
 
-  // Initialize PIP position on mount
+  // Jump-to input state
+  const [jumpSec, setJumpSec] = useState(0);
+
+  // initialize PIP position on mount
   useEffect(() => {
     const miniW = 400,
       miniH = 225,
@@ -32,7 +38,7 @@ export default function ChartsPage() {
     });
   }, []);
 
-  // Sync mini video to main: time, play, pause
+  // sync mini with main video (time / play / pause)
   useEffect(() => {
     const main = videoRef.current;
     const mini = miniRef.current;
@@ -59,34 +65,24 @@ export default function ChartsPage() {
     };
   }, [showMini]);
 
-  // When PIP appears, if main is playing start mini; otherwise keep it paused
-  useEffect(() => {
-    const main = videoRef.current;
-    const mini = miniRef.current;
-    if (showMini && main && mini) {
-      if (!main.paused) mini.play();
-      else mini.pause();
-    }
-  }, [showMini]);
-
-  // Observe visibility of main video to toggle PIP
+  // toggle PIP when main video scrolls out
   useEffect(() => {
     const vid = videoRef.current;
     if (!vid) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => setShowMini(entry.intersectionRatio < 0.8),
+    const obs = new IntersectionObserver(
+      ([e]) => setShowMini(e.intersectionRatio < 0.8),
       { threshold: [0, 0.8, 1] }
     );
-    observer.observe(vid);
-    return () => observer.disconnect();
+    obs.observe(vid);
+    return () => obs.disconnect();
   }, []);
 
-  // Update currentTime on main video progress
+  // update currentTime for EEGChart.revealUpTo
   const handleTimeUpdate = () => {
     setCurrentTime(videoRef.current?.currentTime ?? 0);
   };
 
-  // Track play/pause state via native controls
+  // track native play/pause
   useEffect(() => {
     const vid = videoRef.current;
     if (!vid) return;
@@ -100,15 +96,26 @@ export default function ChartsPage() {
     };
   }, []);
 
-  // Custom play/pause triggered by chart button
+  // seek & pause when EEGChart point clicked or Jump-to Go pressed
+  const handlePointClick = (sec: number) => {
+    const vid = videoRef.current;
+    if (!vid) return;
+    vid.currentTime = sec;
+    vid.pause();
+  };
+
+  // play/pause toggle for overlay button
   const handlePlayPause = () => {
     const vid = videoRef.current;
     if (!vid) return;
-    if (vid.paused) vid.play();
-    else vid.pause();
+    if (vid.paused) {
+      vid.play();
+    } else {
+      vid.pause();
+    }
   };
 
-  // Drag handlers for PIP
+  // PIP drag handlers
   const onMouseDown = (e: React.MouseEvent) => {
     setDragging(true);
     dragOffset.current = { x: e.clientX - pos.x, y: e.clientY - pos.y };
@@ -130,17 +137,15 @@ export default function ChartsPage() {
     };
   }, [dragging]);
 
-  // Seek & pause when a chart timestamp is clicked
-  const handlePointClick = (sec: number) => {
-    const vid = videoRef.current;
-    if (!vid) return;
-    vid.currentTime = sec;
-    vid.pause();
-  };
-
   return (
     <div className="w-full min-h-screen bg-white px-4 py-6">
       <div className="max-w-screen-2xl mx-auto space-y-8">
+        {/* History panel unchanged */}
+        <section className="mb-8">
+          <h2 className="text-2xl font-semibold mb-2 text-black">History</h2>
+          <HistoryPanel />
+        </section>
+
         {/* Participant Video */}
         <section className="mb-8">
           <h2 className="text-2xl font-semibold mb-2 text-black">
@@ -168,12 +173,36 @@ export default function ChartsPage() {
               <h3 className="text-lg font-medium mb-2 text-center text-black">
                 Line Plot
               </h3>
-              <div className="flex-1">
+
+              {/* Jump-to input feature */}
+              <div className="flex items-center mb-4">
+                <label className="text-black mr-2">Jump to (s):</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={jumpSec}
+                  onChange={(e) => setJumpSec(Number(e.target.value))}
+                  className="border p-1 w-20 text-black mr-2"
+                />
+                <button
+                  onClick={() => handlePointClick(jumpSec)}
+                  className="bg-blue-500 text-white px-3 py-1 rounded"
+                >
+                  Go
+                </button>
+              </div>
+
+              {/* Chart with Play/Pause overlay */}
+              <div className="relative flex-1 transform scale-90 origin-center">
+                <button
+                  onClick={handlePlayPause}
+                  className="absolute top-2 left-2 bg-white bg-opacity-75 hover:bg-opacity-100 p-2 rounded-full shadow z-10"
+                >
+                  {isPlaying ? "⏸️" : "▶️"}
+                </button>
                 <EEGChart
                   onPointClick={handlePointClick}
                   revealUpTo={currentTime}
-                  onPlayPause={handlePlayPause}
-                  isPlaying={isPlaying}
                 />
               </div>
             </div>

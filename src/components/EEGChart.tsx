@@ -20,17 +20,12 @@ import { parseEEGColumnar } from "@/data/parseEEG";
 import type { EEGRawData } from "@/data/types";
 
 interface EEGChartProps {
-  /** Called when a data point is clicked */
   onPointClick?: (sec: number) => void;
-  /** Only display data up to this second (inclusive) */
   revealUpTo?: number;
-  /** Callback to play or pause the main video */
   onPlayPause?: () => void;
-  /** Whether the main video is currently playing */
   isPlaying?: boolean;
 }
 
-// Register required Chart.js components
 ChartJS.register(
   CategoryScale,
   LinearScale,
@@ -47,49 +42,74 @@ export const EEGChart: FC<EEGChartProps> = ({
   onPlayPause,
   isPlaying,
 }) => {
-  // Use recorded EEG data
+  // load recorded EEG data
   const raw: EEGRawData = mockEEG;
   const { labels = [], datasets } = parseEEGColumnar(raw);
 
-  // Calculate how many points to display
-  const totalPoints = labels.length;
-  const endIndex =
-    revealUpTo != null
-      ? Math.min(totalPoints, Math.floor(revealUpTo) + 1)
-      : totalPoints;
+  // determine display range
+  const total = labels.length;
+  const end =
+    revealUpTo != null ? Math.min(total, Math.floor(revealUpTo) + 1) : total;
+  const start = Math.max(0, end - 10);
 
-  // Prepare sliced chart data
-  const chartData: ChartData<"line"> = {
-    labels: labels.slice(0, endIndex),
+  // slice for last 10s
+  const data: ChartData<"line"> = {
+    labels: labels.slice(start, end),
     datasets: datasets.map((ds) => ({
       ...ds,
-      data: (ds.data as number[]).slice(0, endIndex),
+      data: (ds.data as number[]).slice(start, end),
     })),
   };
 
-  // Chart configuration
   const options: ChartOptions<"line"> = {
     responsive: true,
     maintainAspectRatio: false,
-    animation: { duration: 0 }, // Turn off animations for sync
+    animation: { duration: 0 },
     plugins: {
-      legend: { position: "top", labels: { color: "black" } },
-      title: { display: true, text: "EEG Metrics", color: "black" },
+      legend: {
+        position: "top",
+        labels: {
+          color: "black",
+          font: { size: 18 }, // legend font
+        },
+      },
+      title: {
+        display: true,
+        text: "EEG Metrics (Last 10s)",
+        color: "black",
+        font: { size: 20 }, // title font
+      },
     },
     scales: {
       x: {
-        title: { display: true, text: "Time (s)", color: "black" },
-        ticks: { color: "black" },
+        title: {
+          display: true,
+          text: "Time (s)",
+          color: "black",
+          font: { size: 16 }, // x-axis title
+        },
+        ticks: {
+          color: "black",
+          font: { size: 14 }, // x-axis tick labels
+        },
       },
       y: {
-        title: { display: true, text: "Value", color: "black" },
-        ticks: { color: "black" },
+        title: {
+          display: true,
+          text: "Value",
+          color: "black",
+          font: { size: 16 }, // y-axis title
+        },
+        ticks: {
+          color: "black",
+          font: { size: 14 }, // y-axis tick labels
+        },
       },
     },
     onClick: (_evt: ChartEvent, elements) => {
-      if (elements.length && chartData.labels) {
+      if (elements.length && data.labels) {
         const idx = elements[0].index;
-        const sec = parseFloat(chartData.labels[idx] as string);
+        const sec = parseFloat(data.labels[idx] as string);
         onPointClick?.(sec);
       }
     },
@@ -97,7 +117,6 @@ export const EEGChart: FC<EEGChartProps> = ({
 
   return (
     <div className="relative flex flex-col h-full p-4">
-      {/* Play/Pause button at top-left */}
       {onPlayPause && (
         <button
           onClick={onPlayPause}
@@ -106,10 +125,8 @@ export const EEGChart: FC<EEGChartProps> = ({
           {isPlaying ? "⏸️" : "▶️"}
         </button>
       )}
-
-      {/* Line chart */}
       <div className="flex-1">
-        <Line data={chartData} options={options} />
+        <Line data={data} options={options} />
       </div>
     </div>
   );
