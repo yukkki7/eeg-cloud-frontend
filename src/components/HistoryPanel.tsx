@@ -30,8 +30,8 @@ ChartJS.register(
 );
 
 export const HistoryPanel: FC = () => {
-  // Granularity options
-  type Granularity = "year" | "month" | "week" | "day";
+  // Only keep year → week → day
+  type Granularity = "year" | "week" | "day";
   const [granularity, setGranularity] = useState<Granularity>("year");
 
   // Reference date in ISO format
@@ -63,17 +63,6 @@ export const HistoryPanel: FC = () => {
         );
         data = labels.map(() => randInt(0, 100));
         break;
-
-      case "month": {
-        const year = base.getFullYear(),
-          month = base.getMonth();
-        const firstDay = new Date(year, month, 1).getDay();
-        const daysInMonth = new Date(year, month + 1, 0).getDate();
-        const weekCount = Math.ceil((daysInMonth + firstDay) / 7);
-        labels = Array.from({ length: weekCount }, (_, i) => `Week ${i + 1}`);
-        data = labels.map(() => randInt(0, 100));
-        break;
-      }
 
       case "week": {
         const dayOfWeek = (base.getDay() + 6) % 7; // 0=Mon
@@ -125,18 +114,10 @@ export const HistoryPanel: FC = () => {
       let newDate = selectedDate;
 
       if (granularity === "year") {
-        newGran = "month";
-        const m = idx + 1;
-        newDate = `${base.getFullYear()}-${String(m).padStart(2, "0")}-01`;
-      } else if (granularity === "month") {
+        // Jump directly year → week
         newGran = "week";
-        const y = base.getFullYear(),
-          mo = base.getMonth();
-        const firstDay = new Date(y, mo, 1).getDay();
-        const monday = new Date(y, mo, 1);
-        const offset = ((firstDay + 6) % 7) * -1 + idx * 7;
-        monday.setDate(monday.getDate() + offset);
-        newDate = monday.toISOString().slice(0, 10);
+        const monthStart = new Date(base.getFullYear(), idx, 1);
+        newDate = monthStart.toISOString().slice(0, 10);
       } else if (granularity === "week") {
         newGran = "day";
         const dayOfWeek = (base.getDay() + 6) % 7;
@@ -165,7 +146,6 @@ export const HistoryPanel: FC = () => {
             className="border p-1 text-black"
           >
             <option value="year">Year</option>
-            <option value="month">Month</option>
             <option value="week">Week</option>
             <option value="day">Day</option>
           </select>
@@ -178,13 +158,6 @@ export const HistoryPanel: FC = () => {
               value={selectedDate.slice(0, 4)}
               onChange={(e) => setSelectedDate(e.target.value + "-01-01")}
               className="border p-1 w-24 text-black"
-            />
-          ) : granularity === "month" ? (
-            <input
-              type="month"
-              value={selectedDate.slice(0, 7)}
-              onChange={(e) => setSelectedDate(e.target.value + "-01")}
-              className="border p-1 text-black"
             />
           ) : granularity === "week" ? (
             <input

@@ -220,16 +220,16 @@ export default function EChartsAllPage() {
       </section>
 
       {/* Pie Chart */}
-      <section>
+      {/* <section>
         <h2 className="text-xl font-semibold mb-2">Pie Chart</h2>
         <div ref={pieRef} className="w-full h-[300px] bg-white rounded" />
-      </section>
+      </section> */}
 
       {/* Scatter Chart */}
-      <section>
+      {/* <section>
         <h2 className="text-xl font-semibold mb-2">Scatter Chart</h2>
         <div ref={scatterRef} className="w-full h-[300px] bg-white rounded" />
-      </section>
+      </section> */}
 
       {/* Radar Chart */}
       <section>
