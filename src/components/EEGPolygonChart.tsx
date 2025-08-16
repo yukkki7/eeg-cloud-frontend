@@ -1,5 +1,6 @@
+// src/components/EEGPolygonChart.tsx
 "use client";
-import React, { FC, useState, useMemo } from "react";
+import React, { FC, useState, useMemo, useEffect } from "react";
 import {
   Chart as ChartJS,
   RadialLinearScale,
@@ -18,8 +19,7 @@ import { mock6D } from "../data/mockEEG6";
 import { parseEEGColumnar } from "../data/parseEEG";
 import type { EEGRawData } from "../data/types";
 
-// register modules
-// register modules
+// Register Chart.js modules
 ChartJS.register(
   RadialLinearScale,
   PointElement,
@@ -31,13 +31,18 @@ ChartJS.register(
   Filler
 );
 
-export const EEGPolygonChart: FC = () => {
+// Define the component's props interface
+interface EEGPolygonChartProps {
+  displayAtSec?: number;
+}
+
+export const EEGPolygonChart: FC<EEGPolygonChartProps> = ({ displayAtSec }) => {
   const raw: EEGRawData = mock6D;
   const { labels = [], datasets: allDatasets } = parseEEGColumnar(raw);
   const channelNames = allDatasets.map((ds) => ds.label as string);
   const maxSecs = labels.length - 1;
 
-  // state for channel selection
+  // State for channel selection
   const [selected, setSelected] = useState<Record<string, boolean>>(
     Object.fromEntries(channelNames.map((name) => [name, true]))
   );
@@ -46,22 +51,33 @@ export const EEGPolygonChart: FC = () => {
     [selected]
   );
 
-  // state for second index
-  const [sec, setSec] = useState(maxSecs);
+  // State for the second index, initialized by the incoming prop or the max value
+  const [sec, setSec] = useState(displayAtSec ?? maxSecs);
 
-  // handle toggle with min/max enforcement
+  // NEW: Use useEffect to listen for prop changes and update the internal state
+  useEffect(() => {
+    if (
+      displayAtSec !== undefined &&
+      displayAtSec >= 0 &&
+      displayAtSec <= maxSecs
+    ) {
+      setSec(displayAtSec);
+    }
+  }, [displayAtSec, maxSecs]);
+
+  // Handle toggle with min/max enforcement
   const toggleChannel = (name: string) => {
     const isSelected = selected[name];
-    // prevent deselect if count <=3
+    // Prevent deselect if count <= 3
     if (isSelected && selectedCount <= 3) return;
-    // prevent select if count >=6
+    // Prevent select if count >= 6
     if (!isSelected && selectedCount >= 6) return;
     setSelected((prev) => ({ ...prev, [name]: !isSelected }));
   };
 
   const datasets = allDatasets.filter((ds) => selected[ds.label as string]);
 
-  // prepare radar data for selected second
+  // Prepare radar data for the selected second
   const radarData: ChartData<"radar"> = {
     labels: datasets.map((ds) => ds.label as string),
     datasets: [
@@ -99,7 +115,7 @@ export const EEGPolygonChart: FC = () => {
 
   return (
     <div className="w-full max-w-md mx-auto p-4 space-y-4">
-      {/* controls */}
+      {/* Controls */}
       <div className="flex flex-wrap gap-4">
         <div className="flex flex-col">
           <label className="font-medium text-black">Second:</label>
@@ -132,7 +148,7 @@ export const EEGPolygonChart: FC = () => {
         </div>
       </div>
 
-      {/* radar chart */}
+      {/* Radar Chart */}
       <Radar data={radarData} options={options} />
     </div>
   );

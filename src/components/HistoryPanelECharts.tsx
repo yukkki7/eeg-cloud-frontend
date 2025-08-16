@@ -1,91 +1,64 @@
-// src/components/HistoryPanel.tsx
+// src/components/HistoryPanelECharts.tsx
 "use client";
 
-import React, { FC, useState, useEffect } from "react";
-import { Bar } from "react-chartjs-2";
-import type {
-  ChartData,
-  ChartOptions,
-  ChartEvent,
-  ActiveElement,
-} from "chart.js";
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend,
-} from "chart.js";
+import React, { FC, useState, useEffect, useRef } from "react";
+import * as echarts from "echarts";
 
-// Register Chart.js modules
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend
-);
-
-// MODIFIED: Define a type for a single session's data, now including time
+// Define a type for a single session's data
 type SessionData = {
   label: string;
   score: number;
   time: string; // e.g., "14:35"
 };
 
-export const HistoryPanel: FC = () => {
-  // Granularity options
+// NEW: Define a specific type for the ECharts click event parameters
+// This resolves the 'no-explicit-any' linting error.
+interface EChartsClickParams {
+  dataIndex: number;
+  // Other properties like 'name', 'value' also exist but are not used here.
+}
+
+export const HistoryPanelECharts: FC = () => {
+  const chartRef = useRef<HTMLDivElement>(null);
+
+  // All state management remains the same
   type Granularity = "year" | "month" | "week" | "day";
   const [granularity, setGranularity] = useState<Granularity>("year");
-
-  // Reference date in ISO format
   const todayIso = new Date().toISOString().slice(0, 10);
   const [selectedDate, setSelectedDate] = useState<string>(todayIso);
-
-  // State to track the selected bar index.
   const [selectedBarIndex, setSelectedBarIndex] = useState<number | null>(null);
-
-  // State to hold the detailed session data for the selected day
   const [daySessionData, setDaySessionData] = useState<SessionData[]>([]);
-
-  // State to hold the single selected session for display
   const [selectedSession, setSelectedSession] = useState<SessionData | null>(
     null
   );
 
-  // Chart data state
-  const [chartData, setChartData] = useState<ChartData<"bar">>({
-    labels: [],
-    datasets: [],
-  });
-
-  // Random integer helper
+  // Helper functions
   const randInt = (min: number, max: number) =>
     Math.floor(Math.random() * (max - min) + min);
-
-  // NEW: Helper to generate a random time string (HH:MM)
   const getRandomTime = () => {
     const hour = String(randInt(8, 23)).padStart(2, "0");
     const minute = String(randInt(0, 59)).padStart(2, "0");
     return `${hour}:${minute}`;
   };
 
-  // Recompute chart data when state changes
+  // Main useEffect to render and update the ECharts instance
   useEffect(() => {
-    const base = new Date(selectedDate);
-    let labels: string[] = [];
-    let data: number[] = [];
+    if (!chartRef.current) return;
 
-    // Clear selected session if we are not in the 'day' view
+    const chart = echarts.init(chartRef.current);
+
     if (granularity !== "day") {
       setSelectedSession(null);
     }
 
+    // --- Data Generation Logic ---
+    const base = new Date(selectedDate);
+    let labels: string[] = [];
+    let data: number[] = [];
+    let sessions: SessionData[] = daySessionData;
+
     switch (granularity) {
-      // ... cases for 'year', 'month', 'week' remain the same
+      // ... cases for 'year', 'month', 'week' remain the same ...
       case "year":
         labels = Array.from({ length: 12 }, (_, i) =>
           new Date(base.getFullYear(), i, 1).toLocaleString("default", {
@@ -94,8 +67,7 @@ export const HistoryPanel: FC = () => {
         );
         data = labels.map(() => randInt(0, 100));
         break;
-
-      case "month": {
+      case "month":
         const year = base.getFullYear(),
           month = base.getMonth();
         const firstDay = new Date(year, month, 1).getDay();
@@ -104,10 +76,8 @@ export const HistoryPanel: FC = () => {
         labels = Array.from({ length: weekCount }, (_, i) => `Week ${i + 1}`);
         data = labels.map(() => randInt(0, 100));
         break;
-      }
-
-      case "week": {
-        const dayOfWeek = (base.getDay() + 6) % 7; // 0=Mon
+      case "week":
+        const dayOfWeek = (base.getDay() + 6) % 7;
         const monday = new Date(base);
         monday.setDate(base.getDate() - dayOfWeek);
         labels = Array.from({ length: 7 }, (_, i) => {
@@ -120,71 +90,60 @@ export const HistoryPanel: FC = () => {
         });
         data = labels.map(() => randInt(0, 100));
         break;
-      }
-
       case "day":
-        if (daySessionData.length > 0) {
-          labels = daySessionData.map((s) => s.label);
-          data = daySessionData.map((s) => s.score);
-        } else {
-          const sessions = randInt(3, 8);
-          // MODIFIED: Generate session data with a random time for each game
-          const generatedSessions = Array.from(
-            { length: sessions },
-            (_, i) => ({
-              label: `Game ${i + 1}`,
-              score: randInt(0, 100),
-              time: getRandomTime(),
-            })
-          );
-          setDaySessionData(generatedSessions);
-          labels = generatedSessions.map((s) => s.label);
-          data = generatedSessions.map((s) => s.score);
+        if (sessions.length === 0) {
+          const sessionCount = randInt(3, 8);
+          sessions = Array.from({ length: sessionCount }, (_, i) => ({
+            label: `Game ${i + 1}`,
+            score: randInt(0, 100),
+            time: getRandomTime(),
+          }));
+          setDaySessionData(sessions);
         }
+        labels = sessions.map((s) => s.label);
+        data = sessions.map((s) => s.score);
         break;
     }
 
-    const baseColor = "rgba(75, 192, 192, 0.6)";
-    const highlightColor = "rgba(28, 100, 100, 1)";
-
-    const backgroundColors = data.map((_, index) =>
-      granularity === "day" && index === selectedBarIndex
-        ? highlightColor
-        : baseColor
-    );
-
-    setChartData({
-      labels,
-      datasets: [
+    // ECharts option object
+    const option = {
+      tooltip: { trigger: "axis" },
+      xAxis: { type: "category", data: labels },
+      yAxis: { type: "value", name: "Score" },
+      series: [
         {
-          label: "Score",
-          data,
-          backgroundColor: backgroundColors,
+          name: "Score",
+          type: "bar",
+          data: data.map((value, index) => ({
+            value: value,
+            itemStyle: {
+              color:
+                index === selectedBarIndex && granularity === "day"
+                  ? "rgba(28, 100, 100, 1)"
+                  : "rgba(75, 192, 192, 0.6)",
+            },
+          })),
         },
       ],
-    });
-  }, [granularity, selectedDate, selectedBarIndex]);
+      grid: {
+        left: "3%",
+        right: "4%",
+        bottom: "3%",
+        containLabel: true,
+      },
+    };
 
-  // Chart.js options with updated click logic
-  const options: ChartOptions<"bar"> = {
-    responsive: true,
-    plugins: {
-      legend: { position: "top", labels: { color: "black" } },
-      title: { display: false },
-    },
-    onClick: (evt: ChartEvent, elements: ActiveElement[]) => {
-      if (!elements.length) return;
-      const idx = elements[0].index;
+    chart.setOption(option);
 
+    // MODIFIED: Apply the specific type to the 'params' argument
+    const handleClick = (params: EChartsClickParams) => {
+      const idx = params.dataIndex;
       if (granularity === "day") {
         setSelectedBarIndex(idx);
-        const session = daySessionData[idx];
-        setSelectedSession(session);
+        setSelectedSession(sessions[idx]);
       } else {
-        const base = new Date(selectedDate);
         let newGranularity: Granularity = granularity;
         let newDate = selectedDate;
-
         if (granularity === "year") {
           const m = idx + 1;
           newDate = `${base.getFullYear()}-${String(m).padStart(2, "0")}-01`;
@@ -206,20 +165,32 @@ export const HistoryPanel: FC = () => {
           newDate = monday.toISOString().slice(0, 10);
           newGranularity = "day";
         }
-
         setGranularity(newGranularity);
         setSelectedDate(newDate);
         setSelectedBarIndex(null);
         setDaySessionData([]);
       }
-    },
-  };
+    };
+    chart.on("click", handleClick);
+
+    // Resize and cleanup
+    const handleResize = () => chart.resize();
+    window.addEventListener("resize", handleResize);
+
+    return () => {
+      chart.off("click", handleClick);
+      window.removeEventListener("resize", handleResize);
+      chart.dispose();
+    };
+  }, [granularity, selectedDate, selectedBarIndex, daySessionData]);
 
   return (
     <div className="bg-gray-50 w-full max-w-4xl mx-auto p-4 rounded-lg shadow-sm space-y-6">
       {/* Header + controls */}
       <div className="space-y-2">
-        <h3 className="text-xl font-semibold text-black">History</h3>
+        <h3 className="text-xl font-semibold text-black">
+          History (ECharts Version)
+        </h3>
         <div className="flex items-center gap-4 text-black">
           <select
             value={granularity}
@@ -229,13 +200,13 @@ export const HistoryPanel: FC = () => {
             }}
             className="border p-1 text-black"
           >
-            {/* ... options ... */}
+            {/* ...options... */}
             <option value="year">Year</option>
             <option value="month">Month</option>
             <option value="week">Week</option>
             <option value="day">Day</option>
           </select>
-          {/* ... date inputs ... */}
+          {/* ...date inputs... */}
           {granularity === "year" ? (
             <input
               type="number"
@@ -270,12 +241,10 @@ export const HistoryPanel: FC = () => {
         </div>
       </div>
 
-      {/* Chart area */}
-      <div className="h-[28rem]">
-        <Bar data={chartData} options={options} />
-      </div>
+      {/* Chart container */}
+      <div ref={chartRef} className="h-[28rem] w-full" />
 
-      {/* MODIFIED: Display the selected session's details, now including the time */}
+      {/* Selected session's details */}
       {selectedSession && (
         <div className="mt-4 p-4 border-t border-gray-200 text-center">
           <p className="text-lg text-black">

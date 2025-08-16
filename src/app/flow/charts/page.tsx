@@ -1,16 +1,25 @@
 // src/app/flow/charts/page.tsx
 "use client";
 
-import React, { useRef } from "react";
+import React, { useRef, useState } from "react";
 import { EEGChart } from "@/components/EEGChart";
 import { EEGPolygonChart } from "@/components/EEGPolygonChart";
 
 export default function ChartsPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
 
+  // NEW: State for the shared timestamp, initialized to 15s.
+  const [sharedTimestamp, setSharedTimestamp] = useState(15);
+
+  // This function is called when a point on the line chart is clicked.
   const handlePointClick = (sec: number) => {
+    // It updates the shared state for the radar chart.
+    setSharedTimestamp(sec);
+
     const vid = videoRef.current;
     if (!vid) return;
+
+    // It also seeks the video, but only for the available portion.
     if (sec <= 15) {
       vid.currentTime = sec;
       vid.play();
@@ -59,7 +68,8 @@ export default function ChartsPage() {
                 Polygon Chart
               </h3>
               <div className="flex-1 overflow-hidden">
-                <EEGPolygonChart />
+                {/* Pass the shared timestamp to the Polygon Chart */}
+                <EEGPolygonChart displayAtSec={sharedTimestamp} />
               </div>
             </div>
           </div>

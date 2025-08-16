@@ -27,6 +27,9 @@ export default function ChartsPage() {
   // Jump-to input state
   const [jumpSec, setJumpSec] = useState(0);
 
+  // NEW: Shared timestamp state for chart interaction, initialized to the last second.
+  const [sharedTimestamp, setSharedTimestamp] = useState(59);
+
   // initialize PIP position on mount
   useEffect(() => {
     const miniW = 400,
@@ -44,6 +47,7 @@ export default function ChartsPage() {
     const mini = miniRef.current;
     if (!main || !mini) return;
 
+    // MODIFIED: Removed shared timestamp update from here to prevent continuous updates.
     const syncTime = () => {
       mini.currentTime = main.currentTime;
     };
@@ -98,6 +102,9 @@ export default function ChartsPage() {
 
   // seek & pause when EEGChart point clicked or Jump-to Go pressed
   const handlePointClick = (sec: number) => {
+    // This is now the ONLY place where the shared timestamp is updated.
+    setSharedTimestamp(sec);
+
     const vid = videoRef.current;
     if (!vid) return;
     vid.currentTime = sec;
@@ -213,7 +220,8 @@ export default function ChartsPage() {
                 Polygon Chart
               </h3>
               <div className="flex-1 overflow-hidden">
-                <EEGPolygonChart />
+                {/* Pass the shared timestamp to the Polygon Chart */}
+                <EEGPolygonChart displayAtSec={sharedTimestamp} />
               </div>
             </div>
           </div>
